@@ -80,14 +80,12 @@ private data class PermissionState(
     val overlay: Boolean,
     val notifications: Boolean,
     val activityRecognition: Boolean,
-    val playServices: Boolean,
 ) {
     companion object {
         fun read(context: Context) = PermissionState(
             overlay = Permissions.canDrawOverlays(context),
             notifications = Permissions.notificationsEnabled(context),
             activityRecognition = Permissions.hasActivityRecognition(context),
-            playServices = Permissions.isPlayServicesAvailable(context),
         )
     }
 }
@@ -199,21 +197,13 @@ fun MainScreen(viewModel: MainViewModel) {
                     )
                 }
             }
-            if (!permissions.activityRecognition) {
+            if (!permissions.activityRecognition && settings.mode == ActivationMode.AUTOMATIC) {
                 item {
                     PermissionCard(
                         title = stringResource(R.string.perm_activity_title),
                         body = stringResource(R.string.perm_activity_body),
                         actionLabel = stringResource(if (!activityAsked) R.string.perm_allow else R.string.perm_open_settings),
                         onAction = requestActivity,
-                    )
-                }
-            }
-            if (!permissions.playServices && settings.mode == ActivationMode.AUTOMATIC) {
-                item {
-                    WarningCard(
-                        title = stringResource(R.string.perm_play_services_title),
-                        text = stringResource(R.string.perm_play_services_body),
                     )
                 }
             }
@@ -292,6 +282,16 @@ fun MainScreen(viewModel: MainViewModel) {
                     SensitivitySlider(
                         value = settings.sensitivity,
                         onValueChange = { value -> viewModel.update { it.copy(sensitivity = value) } },
+                    )
+                }
+            }
+
+            item {
+                SectionCard(title = stringResource(R.string.privacy_title)) {
+                    Text(
+                        text = stringResource(R.string.privacy_body),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }

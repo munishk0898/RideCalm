@@ -1,21 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Motion Cues</string>
-    <string name="screen_title">Vehicle Motion Cues</string>
+    <string name="app_name">RideCalm</string>
+    <string name="screen_title">RideCalm</string>
     <string name="screen_intro">Animated dots at the edges of the screen follow the vehicle\'s movement, which can reduce motion sickness when you look at your phone as a passenger.</string>
 
     <!-- Quick Settings tile -->
-    <string name="tile_label">Motion Cues</string>
+    <string name="tile_label">RideCalm</string>
     <string name="tile_add">Add to Quick Settings</string>
 
     <!-- Notification -->
     <string name="channel_name">Motion cues</string>
     <string name="channel_description">Shown while motion cues are on or waiting for a vehicle.</string>
-    <string name="notification_title">Vehicle Motion Cues</string>
+    <string name="notification_title">RideCalm</string>
     <string name="notification_active">Showing motion cues</string>
     <string name="notification_waiting">Automatic: waiting for vehicle motion</string>
     <string name="notification_needs_overlay">Allow \"Display over other apps\" to show the dots</string>
-    <string name="notification_needs_activity">Allow physical activity access for Automatic mode</string>
     <string name="notification_turn_off">Turn off</string>
 
     <!-- Modes, patterns -->
@@ -25,7 +24,7 @@
     <string name="mode_automatic">Automatic</string>
     <string name="mode_desc_off">Motion cues are off.</string>
     <string name="mode_desc_on">Dots are shown over all apps until you turn them off.</string>
-    <string name="mode_desc_automatic">Dots appear when Android detects you are in a vehicle and hide when you leave it.</string>
+    <string name="mode_desc_automatic">Dots appear when the phone senses you are riding in a vehicle and hide when you start walking or the vehicle stays parked. Detection runs on this phone only, while the screen is on.</string>
     <string name="pattern_title">Pattern</string>
     <string name="pattern_regular">Regular</string>
     <string name="pattern_dynamic">Dynamic</string>
@@ -67,9 +66,9 @@
     <string name="perm_notifications_title">Notifications</string>
     <string name="perm_notifications_body">Lets the app show a status notification with a quick Turn off button while cues are running.</string>
     <string name="perm_activity_title">Physical activity</string>
-    <string name="perm_activity_body">Needed for Automatic mode, so the app can tell when you are in a vehicle.</string>
-    <string name="perm_play_services_title">Google Play services unavailable</string>
-    <string name="perm_play_services_body">Automatic mode needs Google Play services. Use On instead.</string>
+    <string name="perm_activity_body">Optional. Lets Automatic mode use the step counter to tell walking from riding more reliably. Step data stays on this phone.</string>
+    <string name="privacy_title">Privacy</string>
+    <string name="privacy_body">RideCalm works completely offline. It has no internet permission, uses no Google services, collects no analytics and is excluded from cloud backup. Sensor readings are processed in memory and never stored; only your settings are saved on this phone.</string>
     <string name="perm_allow">Allow</string>
     <string name="perm_open_settings">Open settings</string>
     <string name="sensors_missing">This device has no motion sensors, so motion cues cannot follow the vehicle.</string>

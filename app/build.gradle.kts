@@ -12,13 +12,35 @@ android {
         applicationId = "app.motioncues"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
-        vectorDrawables.useSupportLibrary = true
+        versionCode = 2
+        versionName = "1.1.0"
+        // English only: drops unused library translations from the APK.
+        resourceConfigurations += "en"
+    }
+
+    signingConfigs {
+        // Shared debug key so every CI build installs over the previous one.
+        getByName("debug") {
+            storeFile = rootProject.file("keystore/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+        // Your own release key, if provided through environment variables (e.g. CI secrets).
+        val releaseKeystore = System.getenv("RIDECALM_KEYSTORE")
+        if (!releaseKeystore.isNullOrBlank()) {
+            create("release") {
+                storeFile = file(releaseKeystore)
+                storePassword = System.getenv("RIDECALM_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("RIDECALM_KEY_ALIAS")
+                keyPassword = System.getenv("RIDECALM_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         release {
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
@@ -41,6 +63,24 @@ android {
         compose = true
     }
 
+    packaging {
+        resources {
+            excludes += listOf(
+                "/META-INF/{AL2.0,LGPL2.1}",
+                "/META-INF/*.version",
+                "/META-INF/*.kotlin_module",
+                "DebugProbesKt.bin",
+                "kotlin-tooling-metadata.json",
+            )
+        }
+    }
+
+    // Don't embed the dependency report blob that is meant for Google Play.
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = false
+    }
+
     testOptions {
         unitTests.isReturnDefaultValues = true
     }
@@ -56,13 +96,10 @@ dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
-    implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.foundation)
     implementation(libs.androidx.compose.material3)
-    debugImplementation(libs.androidx.compose.ui.tooling)
 
     implementation(libs.androidx.datastore.preferences)
-    implementation(libs.play.services.location)
     implementation(libs.kotlinx.coroutines.android)
 
     testImplementation(libs.junit)

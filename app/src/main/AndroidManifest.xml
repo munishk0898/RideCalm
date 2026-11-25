@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- Draw the motion cue dots over other apps. -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
@@ -9,11 +10,12 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- Automatic mode: in-vehicle detection through Play Services activity transitions. -->
+    <!-- Optional: step detector for on-device vehicle detection in Automatic mode. -->
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
-    <uses-permission
-        android:name="com.google.android.gms.permission.ACTIVITY_RECOGNITION"
-        android:maxSdkVersion="28" />
+
+    <!-- Fully offline: guarantee no library can add network access. -->
+    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />
 
     <!-- Restore On / Automatic mode after a reboot or app update. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
@@ -26,7 +28,9 @@
         android:required="false" />
 
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -62,10 +66,6 @@
                 <action android:name="android.service.quicksettings.action.QS_TILE" />
             </intent-filter>
         </service>
-
-        <receiver
-            android:name=".detection.VehicleTransitionReceiver"
-            android:exported="false" />
 
         <receiver
             android:name=".service.BootReceiver"

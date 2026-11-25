@@ -16,7 +16,6 @@ enum class ServiceStatus(@StringRes val textRes: Int) {
     ACTIVE(R.string.notification_active),
     WAITING_FOR_VEHICLE(R.string.notification_waiting),
     NEEDS_OVERLAY_PERMISSION(R.string.notification_needs_overlay),
-    NEEDS_ACTIVITY_PERMISSION(R.string.notification_needs_activity),
 }
 
 object CueNotifications {

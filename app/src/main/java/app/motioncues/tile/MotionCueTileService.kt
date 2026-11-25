@@ -66,9 +66,7 @@ class MotionCueTileService : TileService() {
 
             repository.setMode(next)
             render(next)
-            val started = ModeController.apply(app, next)
-            val needsActivityPermission = next == ActivationMode.AUTOMATIC && !Permissions.hasActivityRecognition(app)
-            if (!started || needsActivityPermission) openApp()
+            if (!ModeController.apply(app, next)) openApp()
         }
     }
 

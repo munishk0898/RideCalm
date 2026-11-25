@@ -7,13 +7,16 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.os.PowerManager
+import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
-import app.motioncues.detection.VehicleDetector
 import app.motioncues.detection.VehicleState
+import app.motioncues.motion.VehicleClassifier
 import app.motioncues.overlay.OverlayController
 import app.motioncues.sensors.SensorController
 import app.motioncues.settings.ActivationMode
@@ -28,39 +31,62 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
 /**
- * Foreground service hosting the motion cue overlay.
+ * Foreground service hosting the motion cue overlay. Everything runs on the phone: no network,
+ * no Google Play services.
  *
- * - On: overlay and sensors always running (paused while the screen is off).
- * - Automatic: stays in the foreground with sensors off, listening for IN_VEHICLE transitions;
- *   shows the overlay only while in a vehicle. Keeping the service alive avoids Android 12+
- *   restrictions on starting foreground services from the background.
+ * - On: overlay and full-rate sensors while the screen is on.
+ * - Automatic: while the screen is on, sensors run at a low rate and the on-device
+ *   [VehicleClassifier] decides when you are riding; the overlay appears only then.
+ *   With the screen off, all sensors are off.
  * - Off: the service stops itself.
  */
 class MotionCueService : Service() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     private lateinit var repository: SettingsRepository
     private lateinit var sensors: SensorController
     private lateinit var overlay: OverlayController
-    private lateinit var detector: VehicleDetector
 
+    private val classifier = VehicleClassifier()
     private var stateJob: Job? = null
     private var status: ServiceStatus = ServiceStatus.WAITING_FOR_VEHICLE
+    private var mode: ActivationMode = ActivationMode.OFF
     private var screenOn = true
+    private var screenOffAtMs = 0L
+
+    private val detectionListener = object : SensorController.Listener {
+        override fun onMotionSample(timestampNs: Long, horizontalAccel: Float, verticalVibrationRms: Float) {
+            val changed = synchronized(classifier) {
+                classifier.onSample(timestampNs / 1e9, horizontalAccel, verticalVibrationRms)
+            }
+            if (changed) publishVehicleState()
+        }
+
+        override fun onStep(timestampNs: Long) {
+            val changed = synchronized(classifier) { classifier.onStep(timestampNs / 1e9) }
+            if (changed) publishVehicleState()
+        }
+    }
 
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.action) {
                 Intent.ACTION_SCREEN_OFF -> {
                     screenOn = false
-                    sensors.stop()
+                    screenOffAtMs = SystemClock.elapsedRealtime()
                 }
                 Intent.ACTION_SCREEN_ON -> {
                     screenOn = true
-                    if (overlay.isShowing) sensors.start()
+                    // After a long screen-off the trip may be over: detect again from scratch.
+                    if (SystemClock.elapsedRealtime() - screenOffAtMs > STALE_AFTER_MS) {
+                        synchronized(classifier) { classifier.reset() }
+                        VehicleState.update(false)
+                    }
                 }
             }
+            updateSensors()
         }
     }
 
@@ -69,9 +95,8 @@ class MotionCueService : Service() {
     override fun onCreate() {
         super.onCreate()
         repository = SettingsRepository.get(this)
-        sensors = SensorController(this)
+        sensors = SensorController(this).also { it.listener = detectionListener }
         overlay = OverlayController(this, sensors::signal)
-        detector = VehicleDetector(this)
         screenOn = getSystemService(PowerManager::class.java)?.isInteractive ?: true
         CueNotifications.ensureChannel(this)
 
@@ -104,59 +129,66 @@ class MotionCueService : Service() {
 
     override fun onDestroy() {
         scope.cancel()
-        detector.stop()
+        mainHandler.removeCallbacksAndMessages(null)
+        sensors.listener = null
         overlay.hide()
         sensors.stop()
+        VehicleState.update(false)
         unregisterReceiver(screenReceiver)
         super.onDestroy()
     }
 
     private fun render(settings: CueSettings, inVehicle: Boolean) {
+        if (settings.mode != mode && settings.mode != ActivationMode.AUTOMATIC) {
+            synchronized(classifier) { classifier.reset() }
+        }
+        mode = settings.mode
         val newStatus = when (settings.mode) {
             ActivationMode.OFF -> {
                 shutdown()
                 return
             }
-            ActivationMode.ON -> {
-                detector.stop()
+            ActivationMode.ON -> showCues(settings)
+            ActivationMode.AUTOMATIC -> if (inVehicle) {
                 showCues(settings)
-            }
-            ActivationMode.AUTOMATIC -> {
-                if (!detector.start()) {
-                    hideCues()
-                    ServiceStatus.NEEDS_ACTIVITY_PERMISSION
-                } else if (inVehicle) {
-                    showCues(settings)
-                } else {
-                    hideCues()
-                    ServiceStatus.WAITING_FOR_VEHICLE
-                }
+            } else {
+                overlay.hide()
+                ServiceStatus.WAITING_FOR_VEHICLE
             }
         }
+        updateSensors()
         if (newStatus != status) {
             status = newStatus
             CueNotifications.update(this, newStatus)
         }
     }
 
-    private fun showCues(settings: CueSettings): ServiceStatus {
-        if (!overlay.show(settings)) {
-            sensors.stop()
-            return ServiceStatus.NEEDS_OVERLAY_PERMISSION
+    private fun showCues(settings: CueSettings): ServiceStatus =
+        if (overlay.show(settings)) ServiceStatus.ACTIVE else ServiceStatus.NEEDS_OVERLAY_PERMISSION
+
+    /** Runs sensors only as much as the current mode, screen and overlay need. */
+    private fun updateSensors() {
+        when {
+            !screenOn || mode == ActivationMode.OFF -> sensors.stop()
+            mode == ActivationMode.ON ->
+                if (overlay.isShowing) sensors.start(SensorController.Rate.FULL) else sensors.stop()
+            else -> sensors.start(
+                rate = if (overlay.isShowing) SensorController.Rate.FULL else SensorController.Rate.PROBE,
+                withSteps = true,
+            )
         }
-        overlay.update(settings)
-        if (screenOn) sensors.start()
-        return ServiceStatus.ACTIVE
     }
 
-    private fun hideCues() {
-        overlay.hide()
-        sensors.stop()
+    private fun publishVehicleState() {
+        mainHandler.post {
+            val inVehicle = synchronized(classifier) { classifier.inVehicle }
+            VehicleState.update(inVehicle)
+        }
     }
 
     private fun shutdown() {
-        hideCues()
-        detector.stop()
+        overlay.hide()
+        sensors.stop()
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
@@ -184,6 +216,7 @@ class MotionCueService : Service() {
 
     companion object {
         private const val TAG = "MotionCueService"
+        private const val STALE_AFTER_MS = 3 * 60_000L
         const val ACTION_TURN_OFF = "app.motioncues.action.TURN_OFF"
     }
 }

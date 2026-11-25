@@ -48,6 +48,8 @@ class MotionProcessor(private val config: Config = Config()) {
         val yawDeadZone: Float = 0.04f,
         /** Converts yaw rate (rad/s) into an equivalent lateral cue (m/s²). */
         val yawToLateralGain: Float = 4f,
+        /** Averaging window for the vertical vibration RMS used by vehicle detection. */
+        val vibrationTimeConstantSec: Float = 1.0f,
         /** Gaps longer than this between samples are clamped (e.g. after the CPU slept). */
         val maxDtSec: Float = 0.1f,
     )
@@ -61,6 +63,7 @@ class MotionProcessor(private val config: Config = Config()) {
     private val longitudinalFilter = LowPassFilter(config.accelTimeConstantSec)
     private val lateralFilter = LowPassFilter(config.accelTimeConstantSec)
     private val yawFilter = LowPassFilter(config.yawTimeConstantSec)
+    private val verticalPowerFilter = LowPassFilter(config.vibrationTimeConstantSec)
 
     private var gravity: Vec3? = null
     private var hasGravitySensor = false
@@ -78,6 +81,16 @@ class MotionProcessor(private val config: Config = Config()) {
 
     /** Latest filtered motion signal. */
     val signal: MotionSignal get() = output
+
+    /** Smoothed horizontal acceleration magnitude (m/s²), excluding the yaw cue. */
+    @Volatile
+    var horizontalAcceleration: Float = 0f
+        private set
+
+    /** RMS of acceleration along gravity over about a second (road vibration, footsteps). */
+    @Volatile
+    var verticalVibrationRms: Float = 0f
+        private set
 
     fun onGravity(value: Vec3, timestampNs: Long) {
         hasGravitySensor = true
@@ -102,6 +115,8 @@ class MotionProcessor(private val config: Config = Config()) {
         val basis = currentBasis() ?: return
         longitudinal = longitudinalFilter.filter(value dot basis.forward, dt)
         lateral = lateralFilter.filter(value dot basis.right, dt)
+        val vertical = value dot basis.up
+        verticalVibrationRms = kotlin.math.sqrt(verticalPowerFilter.filter(vertical * vertical, dt))
         publish()
     }
 
@@ -116,7 +131,9 @@ class MotionProcessor(private val config: Config = Config()) {
 
     fun reset() {
         gravityFilter.reset(); rawGravityFilter.reset()
-        longitudinalFilter.reset(); lateralFilter.reset(); yawFilter.reset()
+        longitudinalFilter.reset(); lateralFilter.reset(); yawFilter.reset(); verticalPowerFilter.reset()
+        horizontalAcceleration = 0f
+        verticalVibrationRms = 0f
         gravity = null
         hasGravitySensor = false
         lastGravityNs = 0L; lastRawNs = 0L; lastLinearNs = 0L; lastGyroNs = 0L
@@ -131,8 +148,11 @@ class MotionProcessor(private val config: Config = Config()) {
         // and the yaw rate is positive. Both should push the dots to the right.
         val lateralCue = deadZone(-lateral, config.accelDeadZone) +
             config.yawToLateralGain * deadZone(yaw, config.yawDeadZone)
+        val lon = deadZone(longitudinal, config.accelDeadZone)
+        val lat = deadZone(lateral, config.accelDeadZone)
+        horizontalAcceleration = kotlin.math.sqrt(lon * lon + lat * lat)
         output = MotionSignal(
-            longitudinal = deadZone(longitudinal, config.accelDeadZone),
+            longitudinal = lon,
             lateral = lateralCue,
         )
     }
