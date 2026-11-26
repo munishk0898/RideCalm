@@ -1,5 +1,9 @@
 # RideCalm: Vehicle Motion Cues for Android
 
+## Download
+
+Latest APK: [`apk/RideCalm.apk`](apk/RideCalm.apk) (version 1.1.0, about 1.1 MB). Every build is also on the [Releases](../../releases) page.
+
 A native Android take on Apple's Vehicle Motion Cues. Animated dots along the screen edges move with the vehicle (accelerating, braking, turning), which helps reduce motion sickness while a passenger looks at their phone.
 
 - Kotlin, Jetpack Compose (Material 3), Jetpack DataStore
